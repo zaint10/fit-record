@@ -325,30 +325,96 @@ export default function WorkoutSessionPage() {
 
   async function handleAddExercise(exerciseId: string) {
     if (!selectedClientId || addingExercise) return;
+    
+    // Find the exercise details for optimistic UI
+    const exercise = exercises.find(e => e.id === exerciseId);
+    if (!exercise) return;
+    
+    // Determine which clients to add the exercise for
+    let clientsToAdd: Client[];
+    
+    if (addForAllClients && clients.length > 1) {
+      clientsToAdd = clients.filter(client =>
+        !workoutExercises.some(we => we.exercise_id === exerciseId && we.client_id === client.id)
+      );
+    } else {
+      const alreadyHas = workoutExercises.some(
+        we => we.exercise_id === exerciseId && we.client_id === selectedClientId
+      );
+      clientsToAdd = alreadyHas ? [] : [clients.find(c => c.id === selectedClientId)!];
+    }
+    
+    if (clientsToAdd.length === 0) {
+      setShowExerciseModal(false);
+      setAddingExercise(false);
+      return;
+    }
+    
+    // OPTIMISTIC UI: Close modal and add placeholder immediately
+    setShowExerciseModal(false);
     setAddingExercise(true);
+    
+    // Create optimistic workout exercise for selected client
+    const tempId = `temp-${Date.now()}`;
+    const optimisticExercise: WorkoutExercise = {
+      id: tempId,
+      workout_session_id: sessionId,
+      client_id: selectedClientId,
+      exercise_id: exerciseId,
+      order_index: workoutExercises.filter(
+        (we) => we.client_id === selectedClientId,
+      ).length,
+      notes: undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      exercise: exercise,
+      sets: [
+        {
+          id: `${tempId}-set-1`,
+          workout_exercise_id: tempId,
+          set_number: 1,
+          reps: undefined,
+          weight_kg: undefined,
+          is_completed: false,
+          notes: undefined,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: `${tempId}-set-2`,
+          workout_exercise_id: tempId,
+          set_number: 2,
+          reps: undefined,
+          weight_kg: undefined,
+          is_completed: false,
+          notes: undefined,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: `${tempId}-set-3`,
+          workout_exercise_id: tempId,
+          set_number: 3,
+          reps: undefined,
+          weight_kg: undefined,
+          is_completed: false,
+          notes: undefined,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+    };
+    
+    // Add to UI immediately
+    setWorkoutExercises(prev => [...prev, optimisticExercise]);
+    setExpandedExercises(prev => {
+      const next = new Set(prev);
+      next.add(tempId);
+      return next;
+    });
+    
+    // BACKGROUND: Sync with server
     try {
-      // Determine which clients to add the exercise for
-      let clientsToAdd: Client[];
-      
-      if (addForAllClients && clients.length > 1) {
-        // Add for all clients who don't already have this exercise
-        clientsToAdd = clients.filter(client =>
-          !workoutExercises.some(we => we.exercise_id === exerciseId && we.client_id === client.id)
-        );
-      } else {
-        // Add only for the selected client if they don't already have it
-        const alreadyHas = workoutExercises.some(
-          we => we.exercise_id === exerciseId && we.client_id === selectedClientId
-        );
-        clientsToAdd = alreadyHas ? [] : [clients.find(c => c.id === selectedClientId)!];
-      }
-      
-      if (clientsToAdd.length === 0) {
-        setShowExerciseModal(false);
-        return;
-      }
-      
-      // Add the exercise for each client
       for (const client of clientsToAdd) {
         const orderIndex = workoutExercises.filter(we => we.client_id === client.id).length;
         const newExercise = await addWorkoutExercise(
@@ -357,32 +423,40 @@ export default function WorkoutSessionPage() {
           exerciseId,
           orderIndex
         );
-        // Add 3 default sets
-        const sets: ExerciseSet[] = [];
-        for (let i = 1; i <= 3; i++) {
-          const set = await addExerciseSet(newExercise.id, i);
-          sets.push(set);
-        }
-        // Get max weight for this exercise
-        const maxWeight = await getClientMaxWeight(client.id, exerciseId);
-        if (maxWeight) {
-          setMaxWeights(prev => ({ ...prev, [exerciseId]: maxWeight }));
-        }
-        // If this is the selected client, add to UI immediately
+        
+        // Add 3 default sets in parallel for speed
+        const setPromises = [1, 2, 3].map(i => addExerciseSet(newExercise.id, i));
+        const sets = await Promise.all(setPromises);
+        
+        // Fetch max weight in background (non-blocking for UI)
+        getClientMaxWeight(client.id, exerciseId).then(maxWeight => {
+          if (maxWeight) {
+            setMaxWeights(prev => ({ ...prev, [exerciseId]: maxWeight }));
+          }
+        });
+        
+        // Replace optimistic data with real data for selected client
         if (client.id === selectedClientId) {
-          setWorkoutExercises(prev => [...prev, { ...newExercise, sets }]);
+          setWorkoutExercises(prev => 
+            prev.map(we => we.id === tempId ? { ...newExercise, sets } : we)
+          );
           setExpandedExercises(prev => {
             const next = new Set(prev);
+            next.delete(tempId);
             next.add(newExercise.id);
             return next;
           });
         }
       }
-      setShowExerciseModal(false);
-      // For other clients, reload session to update UI
-      await loadClientWorkout();
     } catch (error) {
       console.error('Failed to add exercise:', error);
+      // Rollback optimistic update on error
+      setWorkoutExercises(prev => prev.filter(we => we.id !== tempId));
+      setExpandedExercises(prev => {
+        const next = new Set(prev);
+        next.delete(tempId);
+        return next;
+      });
     } finally {
       setAddingExercise(false);
     }
