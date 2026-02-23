@@ -143,6 +143,7 @@ export default function WorkoutSessionPage() {
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<MuscleGroup | 'all'>('all');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [addForAllClients, setAddForAllClients] = useState(true);
+  const [addingExercise, setAddingExercise] = useState(false);
   
   // Rest timer state
   const [restTimers, setRestTimers] = useState<Record<string, RestTimer | null>>({});
@@ -323,7 +324,8 @@ export default function WorkoutSessionPage() {
   }
 
   async function handleAddExercise(exerciseId: string) {
-    if (!selectedClientId) return;
+    if (!selectedClientId || addingExercise) return;
+    setAddingExercise(true);
     try {
       // Determine which clients to add the exercise for
       let clientsToAdd: Client[];
@@ -381,6 +383,8 @@ export default function WorkoutSessionPage() {
       await loadClientWorkout();
     } catch (error) {
       console.error('Failed to add exercise:', error);
+    } finally {
+      setAddingExercise(false);
     }
   }
 
@@ -958,7 +962,12 @@ export default function WorkoutSessionPage() {
                     <button
                       key={exercise.id}
                       onClick={() => handleAddExercise(exercise.id)}
-                      className="w-full p-3 text-left rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      disabled={addingExercise}
+                      className={`w-full p-3 text-left rounded-lg transition-colors ${
+                        addingExercise 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
                     >
                       <div className="flex items-center gap-2 font-medium">
                         <span>{exercise.name}</span>
@@ -984,7 +993,12 @@ export default function WorkoutSessionPage() {
                 <button
                   key={exercise.id}
                   onClick={() => handleAddExercise(exercise.id)}
-                  className="w-full p-3 text-left rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  disabled={addingExercise}
+                  className={`w-full p-3 text-left rounded-lg transition-colors ${
+                    addingExercise 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
                 >
                   <div className="flex items-center gap-2 font-medium">
                     <span>{exercise.name}</span>
