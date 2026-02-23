@@ -90,6 +90,29 @@ export default function NewExercisePage() {
           </div>
 
           <div>
+            <label className="block text-sm font-medium mb-2">Rest Time Between Sets</label>
+            <div className="flex flex-wrap gap-2">
+              {[null, 30, 60, 90, 120].map((seconds) => (
+                <button
+                  key={seconds ?? 'default'}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, default_rest_seconds: seconds ?? undefined })}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    formData.default_rest_seconds === seconds || (seconds === null && !formData.default_rest_seconds)
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  {seconds ? `${seconds}s` : 'Default'}
+                </button>
+              ))}
+            </div>
+            <p className="text-sm text-gray-500 mt-2">
+              Override the global rest time for this exercise. Heavy compounds may need longer rest.
+            </p>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium mb-2">Description</label>
             <textarea
               value={formData.description}

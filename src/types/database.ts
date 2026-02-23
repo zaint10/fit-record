@@ -3,9 +3,8 @@
 export type MuscleGroup = 
   | 'chest'
   | 'shoulders'
-  | 'triceps'
   | 'back'
-  | 'biceps'
+  | 'arms'
   | 'legs'
   | 'core'
   | 'cardio'
@@ -27,6 +26,7 @@ export interface Exercise {
   muscle_group: MuscleGroup;
   is_bodyweight: boolean;
   description?: string;
+  default_rest_seconds?: number;
   created_at: string;
   updated_at: string;
 }
@@ -101,6 +101,7 @@ export interface ExerciseFormData {
   muscle_group: MuscleGroup;
   is_bodyweight: boolean;
   description?: string;
+  default_rest_seconds?: number;
 }
 
 export interface SetFormData {
@@ -123,10 +124,9 @@ export interface WorkoutExerciseWithDetails extends WorkoutExercise {
 // Muscle group display info
 export const MUSCLE_GROUPS: { value: MuscleGroup; label: string; emoji: string }[] = [
   { value: 'chest', label: 'Chest', emoji: '💪' },
-  { value: 'shoulders', label: 'Shoulders', emoji: '🏋️' },
-  { value: 'triceps', label: 'Triceps', emoji: '💪' },
   { value: 'back', label: 'Back', emoji: '🔙' },
-  { value: 'biceps', label: 'Biceps', emoji: '💪' },
+  { value: 'shoulders', label: 'Shoulders', emoji: '🏋️' },
+  { value: 'arms', label: 'Arms', emoji: '💪' },
   { value: 'legs', label: 'Legs', emoji: '🦵' },
   { value: 'core', label: 'Core', emoji: '🎯' },
   { value: 'cardio', label: 'Cardio', emoji: '❤️' },

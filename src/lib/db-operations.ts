@@ -31,6 +31,7 @@ function toExercise(row: Record<string, unknown>): Exercise {
     muscle_group: row.muscle_group as MuscleGroup,
     is_bodyweight: Boolean(row.is_bodyweight),
     description: (row.description as string | null) ?? undefined,
+    default_rest_seconds: (row.default_rest_seconds as number | null) ?? undefined,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -160,9 +161,9 @@ export async function createExercise(exercise: ExerciseFormData): Promise<Exerci
   const timestamp = now();
   
   await db.execute({
-    sql: `INSERT INTO exercises (id, name, muscle_group, is_bodyweight, description, created_at, updated_at) 
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, exercise.name, exercise.muscle_group, exercise.is_bodyweight ? 1 : 0, exercise.description || null, timestamp, timestamp],
+    sql: `INSERT INTO exercises (id, name, muscle_group, is_bodyweight, description, default_rest_seconds, created_at, updated_at) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, exercise.name, exercise.muscle_group, exercise.is_bodyweight ? 1 : 0, exercise.description || null, exercise.default_rest_seconds || null, timestamp, timestamp],
   });
   
   return getExercise(id) as Promise<Exercise>;
@@ -173,8 +174,8 @@ export async function updateExercise(id: string, exercise: ExerciseFormData): Pr
   const timestamp = now();
   
   await db.execute({
-    sql: `UPDATE exercises SET name = ?, muscle_group = ?, is_bodyweight = ?, description = ?, updated_at = ? WHERE id = ?`,
-    args: [exercise.name, exercise.muscle_group, exercise.is_bodyweight ? 1 : 0, exercise.description || null, timestamp, id],
+    sql: `UPDATE exercises SET name = ?, muscle_group = ?, is_bodyweight = ?, description = ?, default_rest_seconds = ?, updated_at = ? WHERE id = ?`,
+    args: [exercise.name, exercise.muscle_group, exercise.is_bodyweight ? 1 : 0, exercise.description || null, exercise.default_rest_seconds || null, timestamp, id],
   });
   
   return getExercise(id) as Promise<Exercise>;

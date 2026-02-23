@@ -37,9 +37,10 @@ export async function initializeDatabase(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS exercises (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      muscle_group TEXT NOT NULL CHECK (muscle_group IN ('chest', 'shoulders', 'triceps', 'back', 'biceps', 'legs', 'core', 'cardio', 'full_body')),
+      muscle_group TEXT NOT NULL CHECK (muscle_group IN ('chest', 'back', 'shoulders', 'arms', 'legs', 'core', 'cardio', 'full_body')),
       is_bodyweight INTEGER DEFAULT 0,
       description TEXT,
+      default_rest_seconds INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )`,

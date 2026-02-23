@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { PageHeader } from '@/components/PageHeader';
 import { getClients as fetchAllClients, addClientToWorkoutSession } from '@/lib/api';
@@ -15,7 +15,8 @@ import {
   ChevronUp, 
   Trophy,
   Clock,
-  Users
+  Users,
+  Timer
 } from 'lucide-react';
 import {
   getWorkoutSession,
@@ -42,6 +43,17 @@ import type {
   MuscleGroup 
 } from '@/types/database';
 import { MUSCLE_GROUPS, getMuscleGroupLabel, getMuscleGroupEmoji } from '@/types/database';
+
+// Rest timer state type
+interface RestTimer {
+  startedAt: number;
+  duration: number; // in seconds
+  exerciseId: string; // to get exercise-specific rest time
+}
+
+// Default rest time options
+const REST_TIME_OPTIONS = [30, 45, 60, 90, 120];
+const DEFAULT_REST_SECONDS = 60;
 
 // Local input component to handle typing without lag
 function SetInput({ 
@@ -130,6 +142,115 @@ export default function WorkoutSessionPage() {
   const [expandedExercises, setExpandedExercises] = useState<Set<string>>(new Set());
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<MuscleGroup | 'all'>('all');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  
+  // Rest timer state
+  const [restTimers, setRestTimers] = useState<Record<string, RestTimer | null>>({});
+  const [globalRestSeconds, setGlobalRestSeconds] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fitrecord_rest_seconds');
+      return saved ? parseInt(saved) : DEFAULT_REST_SECONDS;
+    }
+    return DEFAULT_REST_SECONDS;
+  });
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const alertedTimersRef = useRef<Set<string>>(new Set());
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize audio on mount
+  useEffect(() => {
+    // Create a short beep sound using Web Audio API
+    audioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onp2ZiHdybHKAi5aYlImAdnFzeIKPmJmThXpwbXN+i5eZlYh8cW90foqXmZWIfHJvdH6Kl5mViHxycHR+ipeTkYZ6cXB0fouYl5OIe3FvdH+Ll5eUiXtxb3R/i5aWk4l7cXB0f4uWlpOJe3FwdH+LlpaTiXtxcHR/i5aWk4l7cXB0f4uWlpOJe3FwdH+LlpaTiXtxcHR/i5aWk4l7cXB0f4uWlpOJe3FwdH+LlZWSiXtycHV/i5WWkoV5cHF2gouYl5KHeXBxdoKLmJeSh3lwcXaCi5iXkod5cHF2gouYl5KHeXBxdoKLmJeSh3lwcXaCi5iXkod5cHF2gouYl5KHeXBxdoKLmJeSh3lwcXaCi5iXkod5cHF2gouYl5KHeXBxdoKLmJeSh3lwcXaCi5aXkod5cXF2gouWl5KHeXFxdoKKlpaRh3pxcXaDipaWkYd6cXF2g4qWlpGHenFxdoOKlpaRh3pxcXaDipaWkYd6cXF2g4qWlpGHenFxdoOKlpaRh3pxcXaDipaWkYd6cXF2g4qWlpGHenFxdoOKlpaRh3pxcXaDipaVkIZ6cnJ3g4qVlZCGenJyd4OKlZWQhnpycneDipWVkIZ6cnJ3g4qVlZCGenJyd4OKlZWQhnpycneDipWVkIZ6cnJ3g4qVlZCGenJyd4OKlZWQhnpycneDipSUj4V6c3N4g4mUlI+FenNzeIOJlJSPhXpzc3iDiZSUj4V6c3N4g4mUlI+FenNzeIOJlJSPhXpzc3iDiZSUj4V6c3N4g4mUlI+FenNzeIOJlJSPhXpzc3iDiZOTjoV7c3N4g4mTk46Fe3NzeIOJk5OOhXtzc3iDiZOTjoV7c3N4g4mTk46Fe3NzeIOJk5OOhXtzc3iDiZOTjoV7c3N4g4mTk46Fe3NzeIOJk5OOhXtzc3iDiZKSjYR7dHR5g4iSko2Ee3R0eYOIkpKNhHt0dHmDiJKSjYR7dHR5g4iSko2Ee3R0eYOIkpKNhHt0dHmDiJKSjYR7dHR5g4iSko2Ee3R0eYOIkpKNhHt0dHmDiJGRjIN8dHV5g4iRkYyDfHR1eYOIkZGMg3x0dXmDiJGRjIN8dHV5g4iRkYyDfHR1eYOIkZGMg3x0dXmDiJGRjIN8dHV5g4iRkYyDfHR1eYOIkZGMg3x0dXmDiJGRjIN8dHV5g4iQkIuCfHV1eoOHkJCLgnx1dXqDh5CQi4J8dXV6g4eQkIuCfHV1eoOHkJCLgnx1dXqDh5CQi4J8dXV6g4eQkIuCfHV1eoOHkJCLgnx1dXqDh5CQi4J8dXV6g4ePj4qBfHZ2eoKHj4+KgXx2dnqCh4+PioF8dnZ6goePj4qBfHZ2eoKHj4+KgXx2dnqCh4+PioF8dnZ6goePj4qBfHZ2eoKHj4+KgXx2dnqCh4+PioF8dnZ6goePj4qBfHZ2eoKHjo6JgH12d3qCho6OiYB9dnd6goaOjomAfXZ3eoKGjo6JgH12d3qCho6OiYB9dnd6goaOjomAfXZ3eoKGjo6JgH12d3qCho6OiYB9dnd6goaOjomAfXZ3eoKGjY2If313d3uBhY2NiH99d3d7gYWNjYh/fXd3e4GFjY2If313d3uBhY2NiH99d3d7gYWNjYh/fXd3e4GFjY2If313d3uBhY2NiH99d3d7gYWNjYh/fXd3e4GFjIyHfn54eHuBhYyMh35+eHh7gYWMjId+fnh4e4GFjIyHfn54eHuBhYyMh35+eHh7gYWMjId+fnh4e4GFjIyHfn54eHuBhYyMh35+eHh7gYWMjId+fnh4e4GFi4uGfX94eXyAhIuLhn1/eHl8gISLi4Z9f3h5fICEi4uGfX94eXyAhIuLhn1/eHl8gISLi4Z9f3h5fICEi4uGfX94eXyAhIuLhn1/eHl8gISLi4Z9f3h5fICEioqFfIB5enx/g4qKhXyAeXp8f4OKioV8gHl6fH+DioqFfIB5enx/g4qKhXyAeXp8f4OKioV8gHl6fH+DioqFfIB5enx/g4qKhXyAeXp8f4OKioV8gHl6fH+DiYmEe4B6e31/g4mJhHuAent9f4OJiYR7gHp7fX+DiYmEe4B6e31/g4mJhHuAent9f4OJiYR7gHp7fX+DiYmEe4B6e31/g4mJhHuAent9f4OJiYR7gHp7fX+DiYiDeoF7fH5+goiIg3qBe3x+foKIiIN6gXt8fn6CiIiDeoF7fH5+goiIg3qBe3x+foKIiIN6gXt8fn6CiIiDeoF7fH5+goiIg3qBe3x+foKIiIN6gXt8fn6Ch4eCeYF8fH5+goeHgnmBfHx+foKHh4J5gXx8fn6Ch4eCeYF8fH5+goeHgnmBfHx+foKHh4J5gXx8fn6Ch4eCeYF8fH5+goeHgnmBfHx+foKHh4J5gXx8fn6Ch4aCeIJ9fX9+gYaGgniCfX1/foGGhoJ4gn19f36BhoaCeIJ9fX9+gYaGgniCfX1/foGGhoJ4gn19f36BhoaCeIJ9fX1/foGGhoJ4gn19fX9+gYaGgniCfX19f36BhoaCeIJ9fX1/foGGhYF3gn5+f39/gYWFgXeCfn5/f3+BhYWBd4J+fn9/f4GFhYF3gn5+f39/gYWFgXeCfn5/f3+BhYWBd4J+fn9/f4GFhYF3gn5+f39/gYWFgXeCfn5/f3+BhYWBd4J+fn9/f4GFhYF3gn5+f39/gYWFgXeCfn5/f3+BhQ==');
+    return () => {
+      audioRef.current = null;
+    };
+  }, []);
+
+  // Timer tick effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Check for timer completions and trigger alerts
+  useEffect(() => {
+    Object.entries(restTimers).forEach(([clientId, timer]) => {
+      if (!timer) return;
+      
+      const elapsed = Math.floor((currentTime - timer.startedAt) / 1000);
+      const remaining = timer.duration - elapsed;
+      
+      // Alert when timer just hits 0 (only once per timer)
+      if (remaining <= 0 && !alertedTimersRef.current.has(clientId)) {
+        alertedTimersRef.current.add(clientId);
+        
+        // Vibrate if supported
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+        
+        // Play beep
+        if (audioRef.current) {
+          audioRef.current.play().catch(() => {});
+        }
+      }
+    });
+  }, [currentTime, restTimers]);
+
+  // Save global rest time to localStorage
+  const updateGlobalRestTime = useCallback((seconds: number) => {
+    setGlobalRestSeconds(seconds);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('fitrecord_rest_seconds', seconds.toString());
+    }
+  }, []);
+
+  // Get rest time for an exercise (exercise-specific or global default)
+  const getRestTimeForExercise = useCallback((exerciseId: string): number => {
+    const exercise = exercises.find(e => e.id === exerciseId);
+    return exercise?.default_rest_seconds ?? globalRestSeconds;
+  }, [exercises, globalRestSeconds]);
+
+  // Start rest timer for a client
+  const startRestTimer = useCallback((clientId: string, exerciseId: string) => {
+    const duration = getRestTimeForExercise(exerciseId);
+    alertedTimersRef.current.delete(clientId); // Reset alert flag
+    setRestTimers(prev => ({
+      ...prev,
+      [clientId]: {
+        startedAt: Date.now(),
+        duration,
+        exerciseId,
+      },
+    }));
+  }, [getRestTimeForExercise]);
+
+  // Clear rest timer for a client
+  const clearRestTimer = useCallback((clientId: string) => {
+    alertedTimersRef.current.delete(clientId);
+    setRestTimers(prev => ({
+      ...prev,
+      [clientId]: null,
+    }));
+  }, []);
+
+  // Get timer display for a client
+  const getTimerDisplay = useCallback((clientId: string): { text: string; isReady: boolean; isResting: boolean } | null => {
+    const timer = restTimers[clientId];
+    if (!timer) return null;
+    
+    const elapsed = Math.floor((currentTime - timer.startedAt) / 1000);
+    const remaining = timer.duration - elapsed;
+    
+    if (remaining > 0) {
+      return { text: `${remaining}s`, isReady: false, isResting: true };
+    } else {
+      const overtime = Math.abs(remaining);
+      return { text: `+${overtime}s`, isReady: true, isResting: false };
+    }
+  }, [currentTime, restTimers]);
+
   async function handleCancelWorkout() {
     try {
       await deleteWorkoutSession(sessionId);
@@ -287,9 +408,17 @@ export default function WorkoutSessionPage() {
     }
   }
 
-  async function handleCompleteSet(setId: string) {
+  async function handleCompleteSet(setId: string, exerciseId?: string) {
     try {
       const completedSet = await completeSet(setId);
+
+      // Find the workout exercise to check if there are more sets remaining
+      const workoutExercise = workoutExercises.find(we => 
+        we.sets?.some(s => s.id === setId)
+      );
+      const sets = workoutExercise?.sets || [];
+      // Count incomplete sets BEFORE this completion (excluding the one we just completed)
+      const remainingIncompleteSets = sets.filter(s => !s.is_completed && s.id !== setId).length;
 
       setWorkoutExercises(prev =>
         prev.map(we => ({
@@ -297,6 +426,16 @@ export default function WorkoutSessionPage() {
           sets: we.sets?.map(s => (s.id === setId ? completedSet : s)),
         }))
       );
+
+      if (selectedClientId && exerciseId) {
+        if (remainingIncompleteSets > 0) {
+          // More sets to do - start/restart the timer
+          startRestTimer(selectedClientId, exerciseId);
+        } else {
+          // Last set of this exercise - clear the timer
+          clearRestTimer(selectedClientId);
+        }
+      }
     } catch (error) {
       console.error('Failed to complete set:', error);
     }
@@ -399,7 +538,7 @@ export default function WorkoutSessionPage() {
       <div className="page-content">
         {/* Session Info */}
         <div className="card p-4 mb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
               <Clock size={18} />
               <span className="text-sm">
@@ -422,6 +561,29 @@ export default function WorkoutSessionPage() {
               )}
             </div>
           </div>
+          
+          {/* Rest Time Selector */}
+          {session.is_active && clients.length > 0 && (
+            <div className="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-700">
+              <Timer size={16} className="text-gray-500" />
+              <span className="text-sm text-gray-500 mr-2">Default Rest:</span>
+              <div className="flex gap-1 flex-wrap">
+                {REST_TIME_OPTIONS.map((seconds) => (
+                  <button
+                    key={seconds}
+                    onClick={() => updateGlobalRestTime(seconds)}
+                    className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                      globalRestSeconds === seconds
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {seconds}s
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       {/* Add Client Modal */}
       <Modal
@@ -463,19 +625,38 @@ export default function WorkoutSessionPage() {
         {clients.length > 1 && (
           <div className="mb-4 overflow-x-auto -mx-4 px-4">
             <div className="flex gap-2 min-w-max">
-              {clients.map((client) => (
-                <button
-                  key={client.id}
-                  onClick={() => setSelectedClientId(client.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                    selectedClientId === client.id
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {client.name}
-                </button>
-              ))}
+              {clients.map((client) => {
+                const timerDisplay = getTimerDisplay(client.id);
+                return (
+                  <button
+                    key={client.id}
+                    onClick={() => {
+                      setSelectedClientId(client.id);
+                      // Clicking on a ready client clears their timer
+                      if (timerDisplay?.isReady) {
+                        clearRestTimer(client.id);
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+                      selectedClientId === client.id
+                        ? 'bg-primary-600 text-white'
+                        : timerDisplay?.isReady
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 animate-pulse-ready'
+                          : timerDisplay?.isResting
+                            ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {client.name}
+                    {timerDisplay && (
+                      <span className="flex items-center gap-1">
+                        <Timer size={14} />
+                        {timerDisplay.text}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -483,7 +664,27 @@ export default function WorkoutSessionPage() {
         {/* Client Header */}
         {selectedClient && (
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">{selectedClient.name}</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold">{selectedClient.name}</h2>
+              {/* Show timer for single client workouts */}
+              {clients.length === 1 && (() => {
+                const timerDisplay = getTimerDisplay(selectedClient.id);
+                if (!timerDisplay) return null;
+                return (
+                  <button
+                    onClick={() => timerDisplay.isReady && clearRestTimer(selectedClient.id)}
+                    className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                      timerDisplay.isReady
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 animate-pulse-ready'
+                        : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                    }`}
+                  >
+                    <Timer size={14} />
+                    {timerDisplay.text}
+                  </button>
+                );
+              })()}
+            </div>
             {session.is_active && (
               <button
                 onClick={() => setShowExerciseModal(true)}
@@ -541,7 +742,20 @@ export default function WorkoutSessionPage() {
                         {getMuscleGroupEmoji(exercise?.muscle_group || 'chest')}
                       </span>
                       <div className="text-left">
-                        <div className="font-semibold">{exercise?.name}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{exercise?.name}</span>
+                          {exercise?.default_rest_seconds ? (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                              <Timer size={10} />
+                              {exercise.default_rest_seconds}s
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 flex items-center gap-1">
+                              <Timer size={10} />
+                              {globalRestSeconds}s
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm text-gray-500">
                           {completedSets}/{sets.length} sets
                           {maxWeight && !exercise?.is_bodyweight && (
@@ -602,7 +816,7 @@ export default function WorkoutSessionPage() {
                           <div className="col-span-4 flex justify-end gap-1">
                             {!set.is_completed && session.is_active && (
                               <button
-                                onClick={() => handleCompleteSet(set.id)}
+                                onClick={() => handleCompleteSet(set.id, workoutExercise.exercise_id)}
                                 className="p-2 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-600"
                               >
                                 <Check size={18} />
