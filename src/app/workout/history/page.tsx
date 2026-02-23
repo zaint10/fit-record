@@ -51,7 +51,7 @@ export default function WorkoutHistoryPage() {
       const sessions = await getWorkoutSessions(50);
       // Load clients for each workout
       const workoutsWithClients = await Promise.all(
-        sessions.map(async (workout) => {
+        sessions.map(async (workout: WorkoutSession) => {
           const clients = await getWorkoutSessionClients(workout.id);
           return { ...workout, clients };
         })
