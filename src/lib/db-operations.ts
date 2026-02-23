@@ -314,37 +314,98 @@ export async function getWorkoutSessionClients(sessionId: string): Promise<Clien
 export async function getWorkoutExercises(sessionId: string, clientId: string): Promise<WorkoutExercise[]> {
   await ensureInitialized();
   
-  // Get workout exercises
-  const weResult = await db.execute({
-    sql: `SELECT * FROM workout_exercises 
-          WHERE workout_session_id = ? AND client_id = ?
-          ORDER BY order_index`,
+  // Single query with JOINs to get all data at once
+  const result = await db.execute({
+    sql: `SELECT 
+            we.id as we_id,
+            we.workout_session_id,
+            we.client_id,
+            we.exercise_id,
+            we.order_index,
+            we.notes as we_notes,
+            we.created_at as we_created_at,
+            we.updated_at as we_updated_at,
+            e.id as e_id,
+            e.name as e_name,
+            e.muscle_group as e_muscle_group,
+            e.is_bodyweight as e_is_bodyweight,
+            e.description as e_description,
+            e.default_rest_seconds as e_default_rest_seconds,
+            e.created_at as e_created_at,
+            e.updated_at as e_updated_at,
+            es.id as es_id,
+            es.workout_exercise_id as es_workout_exercise_id,
+            es.set_number as es_set_number,
+            es.reps as es_reps,
+            es.weight_kg as es_weight_kg,
+            es.is_completed as es_is_completed,
+            es.notes as es_notes,
+            es.created_at as es_created_at,
+            es.updated_at as es_updated_at
+          FROM workout_exercises we
+          LEFT JOIN exercises e ON we.exercise_id = e.id
+          LEFT JOIN exercise_sets es ON we.id = es.workout_exercise_id
+          WHERE we.workout_session_id = ? AND we.client_id = ?
+          ORDER BY we.order_index, es.set_number`,
     args: [sessionId, clientId],
   });
   
-  const workoutExercises: WorkoutExercise[] = [];
+  // Group results by workout exercise
+  const workoutExercisesMap = new Map<string, WorkoutExercise>();
   
-  for (const weRow of weResult.rows) {
-    const we = toWorkoutExercise(weRow as Record<string, unknown>);
+  for (const row of result.rows) {
+    const r = row as Record<string, unknown>;
+    const weId = r.we_id as string;
     
-    // Get the exercise details
-    const exercise = await getExercise(we.exercise_id);
+    if (!workoutExercisesMap.has(weId)) {
+      // Create workout exercise entry
+      const we: WorkoutExercise = {
+        id: weId,
+        workout_session_id: r.workout_session_id as string,
+        client_id: r.client_id as string,
+        exercise_id: r.exercise_id as string,
+        order_index: r.order_index as number,
+        notes: (r.we_notes as string | null) ?? undefined,
+        created_at: r.we_created_at as string,
+        updated_at: r.we_updated_at as string,
+        sets: [],
+      };
+      
+      // Add exercise details if available
+      if (r.e_id) {
+        we.exercise = {
+          id: r.e_id as string,
+          name: r.e_name as string,
+          muscle_group: r.e_muscle_group as MuscleGroup,
+          is_bodyweight: Boolean(r.e_is_bodyweight),
+          description: (r.e_description as string | null) ?? undefined,
+          default_rest_seconds: (r.e_default_rest_seconds as number | null) ?? undefined,
+          created_at: r.e_created_at as string,
+          updated_at: r.e_updated_at as string,
+        };
+      }
+      
+      workoutExercisesMap.set(weId, we);
+    }
     
-    // Get the sets for this workout exercise
-    const setsResult = await db.execute({
-      sql: 'SELECT * FROM exercise_sets WHERE workout_exercise_id = ? ORDER BY set_number',
-      args: [we.id],
-    });
-    const sets = setsResult.rows.map(row => toExerciseSet(row as Record<string, unknown>));
-    
-    workoutExercises.push({
-      ...we,
-      exercise: exercise || undefined,
-      sets,
-    });
+    // Add set if exists
+    if (r.es_id) {
+      const set: ExerciseSet = {
+        id: r.es_id as string,
+        workout_exercise_id: r.es_workout_exercise_id as string,
+        set_number: r.es_set_number as number,
+        reps: (r.es_reps as number | null) ?? undefined,
+        weight_kg: (r.es_weight_kg as number | null) ?? undefined,
+        is_completed: Boolean(r.es_is_completed),
+        notes: (r.es_notes as string | null) ?? undefined,
+        created_at: r.es_created_at as string,
+        updated_at: r.es_updated_at as string,
+      };
+      workoutExercisesMap.get(weId)!.sets!.push(set);
+    }
   }
   
-  return workoutExercises;
+  return Array.from(workoutExercisesMap.values());
 }
 
 export async function addWorkoutExercise(
@@ -363,18 +424,49 @@ export async function addWorkoutExercise(
     args: [id, sessionId, clientId, exerciseId, orderIndex, timestamp, timestamp],
   });
   
+  // Single query with JOIN to get workout exercise + exercise details
   const result = await db.execute({
-    sql: 'SELECT * FROM workout_exercises WHERE id = ?',
+    sql: `SELECT 
+            we.id, we.workout_session_id, we.client_id, we.exercise_id, 
+            we.order_index, we.notes, we.created_at, we.updated_at,
+            e.id as e_id, e.name as e_name, e.muscle_group as e_muscle_group,
+            e.is_bodyweight as e_is_bodyweight, e.description as e_description,
+            e.default_rest_seconds as e_default_rest_seconds,
+            e.created_at as e_created_at, e.updated_at as e_updated_at
+          FROM workout_exercises we
+          LEFT JOIN exercises e ON we.exercise_id = e.id
+          WHERE we.id = ?`,
     args: [id],
   });
   
-  const we = toWorkoutExercise(result.rows[0] as Record<string, unknown>);
-  const exercise = await getExercise(exerciseId);
+  const r = result.rows[0] as Record<string, unknown>;
   
-  return {
-    ...we,
-    exercise: exercise || undefined,
+  const we: WorkoutExercise = {
+    id: r.id as string,
+    workout_session_id: r.workout_session_id as string,
+    client_id: r.client_id as string,
+    exercise_id: r.exercise_id as string,
+    order_index: r.order_index as number,
+    notes: (r.notes as string | null) ?? undefined,
+    created_at: r.created_at as string,
+    updated_at: r.updated_at as string,
+    sets: [],
   };
+  
+  if (r.e_id) {
+    we.exercise = {
+      id: r.e_id as string,
+      name: r.e_name as string,
+      muscle_group: r.e_muscle_group as MuscleGroup,
+      is_bodyweight: Boolean(r.e_is_bodyweight),
+      description: (r.e_description as string | null) ?? undefined,
+      default_rest_seconds: (r.e_default_rest_seconds as number | null) ?? undefined,
+      created_at: r.e_created_at as string,
+      updated_at: r.e_updated_at as string,
+    };
+  }
+  
+  return we;
 }
 
 export async function deleteWorkoutExercise(id: string): Promise<void> {

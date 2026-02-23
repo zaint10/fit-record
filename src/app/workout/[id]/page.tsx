@@ -142,6 +142,7 @@ export default function WorkoutSessionPage() {
   const [expandedExercises, setExpandedExercises] = useState<Set<string>>(new Set());
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<MuscleGroup | 'all'>('all');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [addForAllClients, setAddForAllClients] = useState(true);
   
   // Rest timer state
   const [restTimers, setRestTimers] = useState<Record<string, RestTimer | null>>({});
@@ -324,10 +325,27 @@ export default function WorkoutSessionPage() {
   async function handleAddExercise(exerciseId: string) {
     if (!selectedClientId) return;
     try {
-      // Find all clients in the session who don't already have this exercise
-      const clientsToAdd = clients.filter(client =>
-        !workoutExercises.some(we => we.exercise_id === exerciseId && we.client_id === client.id)
-      );
+      // Determine which clients to add the exercise for
+      let clientsToAdd: Client[];
+      
+      if (addForAllClients && clients.length > 1) {
+        // Add for all clients who don't already have this exercise
+        clientsToAdd = clients.filter(client =>
+          !workoutExercises.some(we => we.exercise_id === exerciseId && we.client_id === client.id)
+        );
+      } else {
+        // Add only for the selected client if they don't already have it
+        const alreadyHas = workoutExercises.some(
+          we => we.exercise_id === exerciseId && we.client_id === selectedClientId
+        );
+        clientsToAdd = alreadyHas ? [] : [clients.find(c => c.id === selectedClientId)!];
+      }
+      
+      if (clientsToAdd.length === 0) {
+        setShowExerciseModal(false);
+        return;
+      }
+      
       // Add the exercise for each client
       for (const client of clientsToAdd) {
         const orderIndex = workoutExercises.filter(we => we.client_id === client.id).length;
@@ -872,6 +890,31 @@ export default function WorkoutSessionPage() {
         onClose={() => setShowExerciseModal(false)}
         title="Add Exercise"
       >
+        {/* Add for all clients toggle - only show when multiple clients */}
+        {clients.length > 1 && (
+          <div className="mb-4 flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div>
+              <div className="font-medium text-sm">Add for all clients</div>
+              <div className="text-xs text-gray-500">
+                {addForAllClients 
+                  ? `Will add to: ${clients.map(c => c.name).join(', ')}`
+                  : `Only for: ${selectedClient?.name}`
+                }
+              </div>
+            </div>
+            <button
+              onClick={() => setAddForAllClients(!addForAllClients)}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                addForAllClients ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                addForAllClients ? 'right-1' : 'left-1'
+              }`} />
+            </button>
+          </div>
+        )}
+
         {/* Muscle Group Filter */}
         <div className="mb-4 overflow-x-auto -mx-4 px-4">
           <div className="flex gap-2 min-w-max">
