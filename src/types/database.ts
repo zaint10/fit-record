@@ -16,6 +16,7 @@ export interface Client {
   email?: string;
   phone?: string;
   notes?: string;
+  gym_time?: string; // Time slot like "10:00" or "18:30"
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +95,7 @@ export interface ClientFormData {
   email?: string;
   phone?: string;
   notes?: string;
+  gym_time?: string;
 }
 
 export interface ExerciseFormData {

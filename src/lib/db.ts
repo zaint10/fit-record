@@ -29,6 +29,7 @@ export async function initializeDatabase(): Promise<void> {
       email TEXT,
       phone TEXT,
       notes TEXT,
+      gym_time TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )`,
@@ -99,6 +100,13 @@ export async function initializeDatabase(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_exercise_sets_workout_exercise ON exercise_sets(workout_exercise_id)`,
     `CREATE INDEX IF NOT EXISTS idx_exercises_muscle_group ON exercises(muscle_group)`,
   ], 'write');
+  
+  // Migration: Add gym_time column if it doesn't exist
+  try {
+    await db.execute(`ALTER TABLE clients ADD COLUMN gym_time TEXT`);
+  } catch {
+    // Column likely already exists, ignore error
+  }
 }
 
 // Run initialization on import (will be called on first request)

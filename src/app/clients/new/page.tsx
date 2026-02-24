@@ -15,6 +15,7 @@ export default function NewClientPage() {
     email: '',
     phone: '',
     notes: '',
+    gym_time: '',
   });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -29,6 +30,7 @@ export default function NewClientPage() {
         email: formData.email?.trim() || undefined,
         phone: formData.phone?.trim() || undefined,
         notes: formData.notes?.trim() || undefined,
+        gym_time: formData.gym_time?.trim() || undefined,
       });
       router.push('/clients');
     } catch (error) {
@@ -78,6 +80,17 @@ export default function NewClientPage() {
               className="input"
               placeholder="+1 234 567 8900"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Gym Time Slot</label>
+            <input
+              type="time"
+              value={formData.gym_time}
+              onChange={(e) => setFormData({ ...formData, gym_time: e.target.value })}
+              className="input"
+            />
+            <p className="text-xs text-gray-500 mt-1">Client's regular gym/workout timing</p>
           </div>
 
           <div>

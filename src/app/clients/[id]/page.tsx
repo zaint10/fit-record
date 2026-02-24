@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingScreen, LoadingSpinner } from '@/components/LoadingSpinner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Edit, Trash2, History, Dumbbell } from 'lucide-react';
+import { Edit, Trash2, History, Dumbbell, Clock } from 'lucide-react';
 import { getClient, deleteClient, getRecentWorkoutsForClient, getClientExerciseHistory } from '@/lib/api';
 import type { Client, WorkoutSession, ClientExerciseMaxWeight } from '@/types/database';
 
@@ -100,6 +100,19 @@ export default function ClientDetailPage() {
         {/* Client Info */}
         <div className="card p-4 mb-6">
           <h2 className="text-xl font-bold mb-2">{client.name}</h2>
+          {client.gym_time && (
+            <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400 mb-2">
+              <Clock size={16} />
+              <span className="font-medium">
+                {new Date(`2000-01-01T${client.gym_time}`).toLocaleTimeString('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                })}
+              </span>
+              <span className="text-sm text-gray-500">gym time</span>
+            </div>
+          )}
           {client.email && (
             <p className="text-gray-600 dark:text-gray-400 mb-1">{client.email}</p>
           )}

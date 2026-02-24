@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { LoadingScreen } from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Plus, Users, Search, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { Plus, Users, Search, MoreVertical, Edit, Trash2, Clock } from 'lucide-react';
 import { getClients, deleteClient } from '@/lib/api';
 import type { Client } from '@/types/database';
 
@@ -111,16 +111,28 @@ export default function ClientsPage() {
                 <div className="flex items-start justify-between">
                   <Link href={`/clients/${client.id}`} className="flex-1">
                     <h3 className="font-semibold text-lg">{client.name}</h3>
-                    {client.email && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {client.email}
-                      </p>
-                    )}
-                    {client.phone && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {client.phone}
-                      </p>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      {client.gym_time && (
+                        <span className="text-sm text-primary-600 dark:text-primary-400 flex items-center gap-1">
+                          <Clock size={14} />
+                          {new Date(`2000-01-01T${client.gym_time}`).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })}
+                        </span>
+                      )}
+                      {client.email && (
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {client.email}
+                        </span>
+                      )}
+                      {client.phone && (
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {client.phone}
+                        </span>
+                      )}
+                    </div>
                   </Link>
                   
                   <div className="relative">

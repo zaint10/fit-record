@@ -20,6 +20,7 @@ export default function EditClientPage() {
     email: '',
     phone: '',
     notes: '',
+    gym_time: '',
   });
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function EditClientPage() {
           email: data.email || '',
           phone: data.phone || '',
           notes: data.notes || '',
+          gym_time: data.gym_time || '',
         });
       }
     } catch (error) {
@@ -57,6 +59,7 @@ export default function EditClientPage() {
         email: formData.email?.trim() || undefined,
         phone: formData.phone?.trim() || undefined,
         notes: formData.notes?.trim() || undefined,
+        gym_time: formData.gym_time?.trim() || undefined,
       });
       router.push(`/clients/${clientId}`);
     } catch (error) {
@@ -125,6 +128,17 @@ export default function EditClientPage() {
               className="input"
               placeholder="+1 234 567 8900"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Gym Time Slot</label>
+            <input
+              type="time"
+              value={formData.gym_time}
+              onChange={(e) => setFormData({ ...formData, gym_time: e.target.value })}
+              className="input"
+            />
+            <p className="text-xs text-gray-500 mt-1">Client's regular gym/workout timing</p>
           </div>
 
           <div>

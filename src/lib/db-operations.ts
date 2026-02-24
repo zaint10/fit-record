@@ -19,6 +19,7 @@ function toClient(row: Record<string, unknown>): Client {
     email: (row.email as string | null) ?? undefined,
     phone: (row.phone as string | null) ?? undefined,
     notes: (row.notes as string | null) ?? undefined,
+    gym_time: (row.gym_time as string | null) ?? undefined,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -100,9 +101,9 @@ export async function createClient(client: ClientFormData): Promise<Client> {
   const timestamp = now();
   
   await db.execute({
-    sql: `INSERT INTO clients (id, name, email, phone, notes, created_at, updated_at) 
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, client.name, client.email || null, client.phone || null, client.notes || null, timestamp, timestamp],
+    sql: `INSERT INTO clients (id, name, email, phone, notes, gym_time, created_at, updated_at) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, client.name, client.email || null, client.phone || null, client.notes || null, client.gym_time || null, timestamp, timestamp],
   });
   
   return getClient(id) as Promise<Client>;
@@ -113,8 +114,8 @@ export async function updateClient(id: string, client: ClientFormData): Promise<
   const timestamp = now();
   
   await db.execute({
-    sql: `UPDATE clients SET name = ?, email = ?, phone = ?, notes = ?, updated_at = ? WHERE id = ?`,
-    args: [client.name, client.email || null, client.phone || null, client.notes || null, timestamp, id],
+    sql: `UPDATE clients SET name = ?, email = ?, phone = ?, notes = ?, gym_time = ?, updated_at = ? WHERE id = ?`,
+    args: [client.name, client.email || null, client.phone || null, client.notes || null, client.gym_time || null, timestamp, id],
   });
   
   return getClient(id) as Promise<Client>;
