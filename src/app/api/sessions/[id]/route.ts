@@ -25,13 +25,18 @@ export async function PUT(
     const body = await request.json();
     
     if (body.action === 'end') {
-      const session = await db.endWorkoutSession(params.id, body.notes);
+      const session = await db.endWorkoutSession(params.id, body.notes, body.custom_end_time);
       return NextResponse.json(session);
     }
     
     if (body.action === 'add_client') {
       await db.addClientToWorkoutSession(params.id, body.client_id);
       return NextResponse.json({ success: true });
+    }
+    
+    if (body.action === 'update_start_time') {
+      const session = await db.updateWorkoutSessionStartTime(params.id, body.started_at);
+      return NextResponse.json(session);
     }
     
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

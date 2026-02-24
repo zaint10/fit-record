@@ -266,9 +266,22 @@ export async function createWorkoutSession(clientIds: string[]): Promise<Workout
   return getWorkoutSession(sessionId) as Promise<WorkoutSession>;
 }
 
-export async function endWorkoutSession(id: string, notes?: string): Promise<WorkoutSession> {
+export async function updateWorkoutSessionStartTime(id: string, startedAt: string): Promise<WorkoutSession> {
   await ensureInitialized();
   const timestamp = now();
+  
+  await db.execute({
+    sql: `UPDATE workout_sessions SET started_at = ?, updated_at = ? WHERE id = ?`,
+    args: [startedAt, timestamp, id],
+  });
+  
+  return getWorkoutSession(id) as Promise<WorkoutSession>;
+}
+
+export async function endWorkoutSession(id: string, notes?: string, customEndTime?: string): Promise<WorkoutSession> {
+  await ensureInitialized();
+  const timestamp = now();
+  const endedAt = customEndTime || timestamp;
   
   // Auto-complete all sets that have weight or reps entered
   await db.execute({
@@ -284,7 +297,7 @@ export async function endWorkoutSession(id: string, notes?: string): Promise<Wor
   
   await db.execute({
     sql: `UPDATE workout_sessions SET ended_at = ?, is_active = 0, notes = ?, updated_at = ? WHERE id = ?`,
-    args: [timestamp, notes || null, timestamp, id],
+    args: [endedAt, notes || null, timestamp, id],
   });
   
   return getWorkoutSession(id) as Promise<WorkoutSession>;

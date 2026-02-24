@@ -132,13 +132,23 @@ export async function createWorkoutSession(clientIds: string[]): Promise<Workout
   return res.json();
 }
 
-export async function endWorkoutSession(id: string, notes?: string): Promise<WorkoutSession> {
+export async function endWorkoutSession(id: string, notes?: string, customEndTime?: string): Promise<WorkoutSession> {
   const res = await fetch(`${API_BASE}/sessions/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'end', notes }),
+    body: JSON.stringify({ action: 'end', notes, custom_end_time: customEndTime }),
   });
   if (!res.ok) throw new Error('Failed to end session');
+  return res.json();
+}
+
+export async function updateWorkoutSessionStartTime(id: string, startedAt: string): Promise<WorkoutSession> {
+  const res = await fetch(`${API_BASE}/sessions/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'update_start_time', started_at: startedAt }),
+  });
+  if (!res.ok) throw new Error('Failed to update session start time');
   return res.json();
 }
 

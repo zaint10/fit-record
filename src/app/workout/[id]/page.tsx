@@ -16,7 +16,8 @@ import {
   Trophy,
   Clock,
   Users,
-  Timer
+  Timer,
+  Pencil
 } from 'lucide-react';
 import {
   getWorkoutSession,
@@ -32,6 +33,7 @@ import {
   endWorkoutSession,
   getClientMaxWeight,
   getClientLastWorkoutExercises,
+  updateWorkoutSessionStartTime,
 } from '@/lib/api';
 import { deleteWorkoutSession } from '@/lib/api';
 import type { 
@@ -144,6 +146,12 @@ export default function WorkoutSessionPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [addForAllClients, setAddForAllClients] = useState(true);
   const [addingExercise, setAddingExercise] = useState(false);
+  
+  // Custom datetime state
+  const [showEditStartTime, setShowEditStartTime] = useState(false);
+  const [editStartTimeValue, setEditStartTimeValue] = useState('');
+  const [useCustomEndTime, setUseCustomEndTime] = useState(false);
+  const [customEndTimeValue, setCustomEndTimeValue] = useState('');
   
   // Rest timer state
   const [restTimers, setRestTimers] = useState<Record<string, RestTimer | null>>({});
@@ -554,10 +562,25 @@ export default function WorkoutSessionPage() {
 
   async function handleEndWorkout() {
     try {
-      await endWorkoutSession(sessionId);
+      const customEndTime = useCustomEndTime && customEndTimeValue 
+        ? new Date(customEndTimeValue).toISOString() 
+        : undefined;
+      await endWorkoutSession(sessionId, undefined, customEndTime);
       router.push('/workout/history');
     } catch (error) {
       console.error('Failed to end workout:', error);
+    }
+  }
+
+  async function handleUpdateStartTime() {
+    if (!editStartTimeValue) return;
+    try {
+      const newStartTime = new Date(editStartTimeValue).toISOString();
+      const updatedSession = await updateWorkoutSessionStartTime(sessionId, newStartTime);
+      setSession(updatedSession);
+      setShowEditStartTime(false);
+    } catch (error) {
+      console.error('Failed to update start time:', error);
     }
   }
 
@@ -635,15 +658,28 @@ export default function WorkoutSessionPage() {
         {/* Session Info */}
         <div className="card p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+            <button 
+              onClick={() => {
+                // Format for datetime-local input
+                const date = new Date(session.started_at);
+                const localIso = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                setEditStartTimeValue(localIso);
+                setShowEditStartTime(true);
+              }}
+              className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            >
               <Clock size={18} />
               <span className="text-sm">
-                Started {new Date(session.started_at).toLocaleTimeString('en-US', {
+                Started {new Date(session.started_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })} {new Date(session.started_at).toLocaleTimeString('en-US', {
                   hour: '2-digit',
                   minute: '2-digit',
                 })}
               </span>
-            </div>
+              <Pencil size={14} className="opacity-50" />
+            </button>
             <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
               <Users size={18} />
               <span className="text-sm">{clients.length} client{clients.length !== 1 ? 's' : ''}</span>
@@ -1093,15 +1129,117 @@ export default function WorkoutSessionPage() {
         </div>
       </Modal>
 
-      {/* End Workout Confirm */}
-      <ConfirmDialog
+      {/* Edit Start Time Modal */}
+      <Modal
+        isOpen={showEditStartTime}
+        onClose={() => setShowEditStartTime(false)}
+        title="Edit Start Time"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Set a custom start time for this workout session. Useful for logging past workouts.
+          </p>
+          <input
+            type="datetime-local"
+            value={editStartTimeValue}
+            onChange={(e) => setEditStartTimeValue(e.target.value)}
+            className="input w-full"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowEditStartTime(false)}
+              className="btn btn-secondary flex-1"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpdateStartTime}
+              className="btn btn-primary flex-1"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* End Workout Modal */}
+      <Modal
         isOpen={showEndConfirm}
-        onClose={() => setShowEndConfirm(false)}
-        onConfirm={handleEndWorkout}
+        onClose={() => {
+          setShowEndConfirm(false);
+          setUseCustomEndTime(false);
+          setCustomEndTimeValue('');
+        }}
         title="End Workout"
-        message="Are you sure you want to end this workout session? This will save all recorded exercises and sets."
-        confirmText="End Workout"
-      />
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600 dark:text-gray-300">
+            Are you sure you want to end this workout session? This will save all recorded exercises and sets.
+          </p>
+          
+          {/* Custom End Time Toggle */}
+          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm">Use custom end time</div>
+                <div className="text-xs text-gray-500">
+                  {useCustomEndTime ? 'Set a specific end time' : 'Will use current time'}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!useCustomEndTime) {
+                    // Set default to current time
+                    const now = new Date();
+                    const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                    setCustomEndTimeValue(localIso);
+                  }
+                  setUseCustomEndTime(!useCustomEndTime);
+                }}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  useCustomEndTime ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  useCustomEndTime ? 'right-1' : 'left-1'
+                }`} />
+              </button>
+            </div>
+            
+            {useCustomEndTime && (
+              <input
+                type="datetime-local"
+                value={customEndTimeValue}
+                onChange={(e) => setCustomEndTimeValue(e.target.value)}
+                className="input w-full"
+              />
+            )}
+          </div>
+          
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => {
+                setShowEndConfirm(false);
+                setUseCustomEndTime(false);
+                setCustomEndTimeValue('');
+              }}
+              className="btn btn-secondary flex-1"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                handleEndWorkout();
+                setShowEndConfirm(false);
+              }}
+              className="btn btn-danger flex-1"
+            >
+              End Workout
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Cancel Workout Confirm */}
       <ConfirmDialog
         isOpen={showCancelConfirm}
